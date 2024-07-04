@@ -1,0 +1,253 @@
+---
+title: "Google Data Analytics Capstone"
+author: "Putu Angga Kurniawan"
+date: "2024-07-04"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Scenario 
+
+A Chicago-based bike-sharing company, Cyclistic, wants an analysis of how its riders use their services. The customer base is divided into two categories, annual members and casual riders. Annual members are defined as those who have a yearly subscription, whereas casual riders are defined as though who use single session and day passes. Financial analysts have found that annual members are the most lucrative customer base, and so the director of marketing wants data-backed analysis that will help guide their marketing campaign to convert casual riders into annual members.
+
+# Ask 
+
+I will be using dataset from the year 2022. All data is publicly available data by the Motivate International Inc., under this license through the Google Data Analytics Certificate. The attributes within the data contain such information as rider identification number, bike type, starting and ending latitude and longitude, rider status (casual or member), and start and end station identification.
+
+### Does it pass the ROCCC test? (Reliable, Original, Comprehensive, Current, and Cited)
+
+**Reliable**: Yes, the dataset comes the City of Chicago’s Divvy program, which is managed by the company Lyft Bikes and Scooters, LLC, which is part of a publicly traded company.
+
+**Original**: Yes, all of the data is original and collected by first-party
+
+**Comprehensive**: Overall, it is comprehensive and sufficient to answer the business question at hand.
+
+**Current**: No, this data is from 2022, so it is relevant but not current.
+
+**Cited**: Yes, it comes from a first-party source collected from the Divvy program, who runs the bikeshare program in Chicago. The sources are credible.
+
+# Prepare 
+
+Load necessary libraries
+
+```{r}
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(ggplot2)
+library(sf)
+library(scales)
+```
+
+Load Data
+
+```{r}
+jan_tripdata <- read_csv("202201-divvy-tripdata.csv")
+feb_tripdata <- read_csv("202202-divvy-tripdata.csv")
+mar_tripdata <- read_csv("202203-divvy-tripdata.csv")
+apr_tripdata <- read_csv("202204-divvy-tripdata.csv")
+may_tripdata <- read_csv("202205-divvy-tripdata.csv")
+jun_tripdata <- read_csv("202206-divvy-tripdata.csv")
+jul_tripdata <- read_csv("202207-divvy-tripdata.csv")
+aug_tripdata <- read_csv("202208-divvy-tripdata.csv")
+sep_tripdata <- read_csv("202209-divvy-tripdata.csv")
+oct_tripdata <- read_csv("202210-divvy-tripdata.csv")
+nov_tripdata <- read_csv("202211-divvy-tripdata.csv")
+dec_tripdata <- read_csv("202212-divvy-tripdata.csv")
+```
+
+Combine tables into one dataset
+
+```{r}
+total_data_set <- rbind(jan_tripdata, feb_tripdata, feb_tripdata, mar_tripdata, apr_tripdata, may_tripdata, jun_tripdata, jul_tripdata, aug_tripdata, sep_tripdata, oct_tripdata, nov_tripdata, dec_tripdata)
+```
+
+Inspect the columns to determine what functions will be necessary to perform functions.
+
+```{r}
+str(total_data_set)
+```
+
+# Process
+
+Clean the dataset of any null values.
+
+```{r}
+clean_dataset <- na.omit(total_data_set) %>% 
+  distinct()
+```
+
+After cleaning out any rows with null values, I decided to scrub out any rows containing “docked_bike.” The prompt did not provide a definition, and since I do not have a manager to ask, I decided to classify them as dirty data.
+
+```{r}
+rideable_type <- clean_dataset$rideable_type
+total_dataset <- subset(clean_dataset, rideable_type != "docked_bike")
+```
+
+Next, we must add the columns “ride_length,” “month,” and “day_of_week” by creating a new table. This will allow us to make the calculations we need.
+
+```{r}
+total_dataset <- total_dataset %>% 
+  mutate(ride_length = difftime(ended_at, started_at, units = "mins")) %>% 
+  mutate(day_of_week = wday(total_dataset$started_at)) %>% 
+  mutate(month = format(as.Date(total_dataset$started_at, format="%d/%m/%Y"),"%m"))
+```
+
+# Analyze
+
+Next, we need to create the variable for “ride_length” column and then perform some calculations. This will reveal the average ride length for each month of the year.
+
+```{r}
+ride_length <- total_dataset$ride_length
+
+total_dataset %>% 
+  group_by(month, member_casual) %>% 
+  summarize(mean_ridelength = mean(ride_length)) %>% 
+  arrange(member_casual) %>% 
+  print(n=24)
+```
+
+We will create some additional variables from the columns for future calculations. All necessary variables are below.
+
+```{r}
+ride_length <- (total_dataset$ride_length)
+member_casual <- total_dataset$member_casual
+day_of_week <- total_dataset$day_of_week
+rideable_type <- total_dataset$rideable_type
+```
+
+Then we calculate average ride length for each day of the week.
+
+```{r}
+total_dataset %>% 
+  group_by(day_of_week, member_casual) %>% 
+  summarize(mean_ridelength = mean(ride_length)) %>% 
+  arrange(member_casual)
+```
+
+Next, we will calculate the total rides per month.
+
+```{r}
+total_dataset %>% 
+  group_by(month, member_casual) %>% 
+  summarize(total_rides = n()) %>% 
+  arrange(member_casual) %>% 
+  print(n=24)
+```
+
+As well as per day.
+
+```{r}
+total_dataset %>% 
+  group_by(day_of_week, member_casual) %>% 
+  summarize(total_rides = n()) %>% 
+  arrange(member_casual)
+```
+
+# Share
+
+While one can eyeball these numbers to find conclusions, its more helpful to visualize the results so that stakeholders can more quickly understand the results. The first visualization is total rides per each month and then total rides per weekday, filtered by membership status. The scale for weekday is 1 = Sunday to 7 = Saturday.
+
+```{r}
+ggplot(total_dataset, aes(x=month, fill = member_casual)) + 
+  geom_bar(position = "dodge") + scale_y_continuous(labels=comma) + 
+  ggtitle("Total Rides: Month") + 
+  xlab("Month") + ylab("Rides") + labs(fill = "Membership Status")
+```
+
+```{r}
+ggplot(total_dataset, aes(x=day_of_week, fill = member_casual)) + 
+  geom_bar(position = "dodge") + scale_y_continuous(labels=comma) +
+  scale_x_continuous(breaks=seq(1,7,1)) + 
+  ggtitle("Total Rides: Day of the Week") + 
+  xlab("Weekday") + ylab("Rides") + labs(fill = "Membership Status")
+```
+
+Then we will look at the average ride length per month and per weekday.
+
+```{r}
+total_dataset %>% 
+  group_by(month, member_casual) %>% 
+  summarize(mean_ridelength = mean(ride_length)) %>% 
+  ggplot(aes(x = month, y = mean_ridelength, fill = member_casual)) + 
+  geom_col(position = "dodge2")  + ggtitle("Average Ride Length: Month") + 
+  xlab("Month") + ylab("Minutes") + labs(fill = "Membership Status")
+```
+
+```{r}
+total_dataset %>% 
+  group_by(day_of_week, member_casual) %>% 
+  summarize(mean_ridelength = mean(ride_length)) %>% 
+  ggplot(aes(x = day_of_week, y = mean_ridelength, fill = member_casual)) + 
+  scale_x_continuous(breaks=seq(1,7,1)) + geom_col(position = "dodge2")  + 
+  ggtitle("Average Ride Length: Day of Week") + xlab("Weekday") + 
+  ylab("Minutes") + labs(fill = "Membership Status") 
+```
+
+Recognizing that electric bike and classic bike riders may have different riding patterns, I plotted the usage separately for each bike type for both member and casual riders.
+
+```{r}
+ggplot(total_dataset, aes(x=month, fill = member_casual)) + 
+  geom_bar(position = "dodge") + scale_y_continuous(labels=comma) + 
+  ggtitle("Total Rides: Month") + 
+  xlab("Month") + ylab("Rides") + labs(fill = "Membership Status") +
+  facet_wrap(vars(rideable_type))
+```
+
+```{r}
+ggplot(total_dataset, aes(x=day_of_week, fill = member_casual)) + 
+  geom_bar(position = "dodge") + scale_y_continuous(labels=comma) +
+  ggtitle("Total Rides: Day of the Week") + 
+  scale_x_continuous(breaks=seq(1,7,1)) +
+  xlab("Weekday") + ylab("Rides") + labs(fill = "Membership Status") +
+  facet_wrap(vars(rideable_type))
+```
+
+Average ride length
+
+```{r}
+total_dataset %>% 
+  group_by(month, member_casual, rideable_type) %>% 
+  summarize(mean_ridelength = mean(ride_length)) %>% 
+  ggplot(aes(x = month, y = mean_ridelength, fill = member_casual)) + 
+  geom_col(position = "dodge2")  + ggtitle("Average Ride Length: Month") + 
+  xlab("Month") + ylab("Minutes") + labs(fill = "Membership Status") +
+  facet_wrap(vars(rideable_type))
+```
+
+```{r}
+total_dataset %>% 
+  group_by(day_of_week, member_casual, rideable_type) %>% 
+  summarize(mean_ridelength = mean(ride_length)) %>% 
+  ggplot(aes(x = day_of_week, y = mean_ridelength, fill = member_casual)) + 
+  scale_x_continuous(breaks=seq(1,7,1)) + geom_col(position = "dodge2")  + 
+  ggtitle("Average Ride Length: Day of Week") + xlab("Weekday") + ylab("Minutes") + 
+  labs(fill = "Membership Status") + facet_wrap(vars(rideable_type))
+```
+
+The data reveals some interesting trends between the casual users and the member users:
+
+-   Casual riders have long average ride lengths, whereas member riders take more frequent rides.
+
+-   Member riders take more rides during the weekday, whereas casual riders take more rides on the weekend.
+
+-   Average ride length increases on weekends for both casual and member riders.
+
+-   Between both rider groups, there is a greater disparity in average ride length among classic bike riders than electric bike riders.
+
+These trends all suggest that casual riders and member riders use the program for different purposes, and therefore, it is not precisely clear how easy it is to convert casual riders to member riders.
+
+# Act
+
+Cyclistic needs more information about the member riders in order to determine the best strategy for attracting more members. A survey of member riders would be a good exploratory step to determine why they joined the program. Some questions I would use in the survey would include:
+
+-   Why do you use the program?
+
+-   Why did you join the membership program?
+
+-   How frequently do you use the program?
+
+-   How did you learn about the program?
+
+After collecting more data, the company can create a more effective marketing campaign.
